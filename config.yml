@@ -1,0 +1,41 @@
+# Configuration for DSOM-BEATS Model
+
+# --- Data Parameters ---
+lookback: 96          # Input sequence length
+horizon: 24           # Forecast horizon
+
+# --- DSOM Parameters ---
+som:
+  map_size: [10, 10]    # SOM grid dimensions (rows, cols)
+  tau: 1.0              # Temperature parameter for soft assignments
+
+# --- N-BEATS Expert Parameters ---
+experts:
+  trend:
+    n_blocks: 3
+    hidden_units: 256
+    poly_degree: 3      # Polynomial degree for trend
+  seasonality:
+    n_blocks: 3
+    hidden_units: 256
+    fourier_terms: 5    # Fourier terms for seasonality
+  transformer:
+    enabled: true
+    n_layers: 2
+    n_head: 4
+    d_model: 64
+    d_hid: 128
+    dropout: 0.1
+
+# --- Training Parameters ---
+training:
+  lr_forecast: 0.001    # Learning rate for forecasting components
+  lr_som: 0.001         # Learning rate for SOM
+  lambda_stability: 0.1 # Stability loss weight
+  log_interval: 100     # Log every N batches
+  curriculum_epochs: 5  # Number of epochs for curriculum learning
+
+# --- Checkpointing ---
+checkpoint:
+  save_dir: 'checkpoints/' # Directory to save model checkpoints
+  save_every_epoch: true   # Whether to save a checkpoint after every epoch

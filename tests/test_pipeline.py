@@ -28,24 +28,22 @@ class TestEndToEndPipeline(unittest.TestCase):
         cls.config = Namespace(
             lookback=96,
             horizon=24,
+            data=Namespace(
+                name='custom',
+                splitting=Namespace(
+                    train_ratio=0.7,
+                    val_ratio=0.15,
+                    test_ratio=0.15
+                )
+            ),
             som=Namespace(
                 map_size=[4, 4],
                 tau=1.0
             ),
             experts=Namespace(
-                trend=Namespace(
-                    n_blocks=2,
-                    hidden_units=64,
-                    poly_degree=2
-                ),
-                seasonality=Namespace(
-                    n_blocks=2,
-                    hidden_units=64,
-                    fourier_terms=3
-                ),
-                transformer=Namespace(
-                    enabled=False # Keep tests simple by default
-                )
+                trend=Namespace(n_blocks=2, hidden_units=64, poly_degree=2),
+                seasonality=Namespace(n_blocks=2, hidden_units=64, fourier_terms=3),
+                transformer=Namespace(enabled=False)
             ),
             training=Namespace(
                 lr_forecast=0.001,
@@ -57,35 +55,26 @@ class TestEndToEndPipeline(unittest.TestCase):
             checkpoint=Namespace(
                 save_dir='test_checkpoints/',
                 save_every_epoch=False
+            ),
+            visualization=Namespace(
+                enabled=False # Disable for tests
             )
         )
 
         # 2. Create synthetic data
-        n_samples = 200
+        n_samples = 1000 # Increased samples for meaningful splits
         time = np.arange(n_samples)
         values = np.sin(time * 0.1) + np.random.normal(0, 0.1, n_samples)
         df = pd.DataFrame({'value': values})
 
         # 3. Preprocess the data
         preprocessor = DataPreprocessor()
-        # The preprocessor expects a dictionary, so we create one.
-        preprocess_config = {
-            'impute_method': 'forward_fill',
-            'remove_outliers': False,
-            'detrend': False,
-            'scale_method': 'standard',
-            'lookback': cls.config.lookback,
-            'horizon': cls.config.horizon,
-            'stride': 1
-        }
-        X, y = preprocessor.process(df, preprocess_config)
+        datasets = preprocessor.process(df, cls.config)
 
-        cls.X_tensor = torch.from_numpy(X).float()
-        cls.y_tensor = torch.from_numpy(y).float()
-
-        # 4. Create DataLoader
-        dataset = TensorDataset(cls.X_tensor, cls.y_tensor)
-        cls.dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+        # 4. Create DataLoaders
+        cls.train_loader = DataLoader(TensorDataset(torch.from_numpy(datasets['train'][0]).float(), torch.from_numpy(datasets['train'][1]).float()), batch_size=32, shuffle=True)
+        cls.val_loader = DataLoader(TensorDataset(torch.from_numpy(datasets['val'][0]).float(), torch.from_numpy(datasets['val'][1]).float()), batch_size=32, shuffle=False)
+        cls.test_loader = DataLoader(TensorDataset(torch.from_numpy(datasets['test'][0]).float(), torch.from_numpy(datasets['test'][1]).float()), batch_size=32, shuffle=False)
 
         # 5. Initialize Model and Pipeline
         cls.model = DSOM_NBEATS(cls.config)
@@ -96,7 +85,7 @@ class TestEndToEndPipeline(unittest.TestCase):
         Test that a full training epoch completes without errors.
         """
         try:
-            self.pipeline.train_epoch(self.dataloader, epoch=0)
+            self.pipeline.train_epoch(self.train_loader, self.val_loader, epoch=0)
         except Exception as e:
             self.fail(f"Training pipeline failed with an exception: {e}")
 
@@ -105,7 +94,7 @@ class TestEndToEndPipeline(unittest.TestCase):
         Test that the model produces outputs of the correct shape during inference.
         """
         self.model.eval()
-        x_batch, _ = next(iter(self.dataloader))
+        x_batch, _ = next(iter(self.train_loader))
 
         with torch.no_grad():
             pred, assignments = self.model(x_batch)

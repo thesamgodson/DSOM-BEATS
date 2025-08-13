@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.models.nbeats import DSOM_NBEATS
 from src.losses.losses import volatility_aware_mse, som_quantization_loss, cluster_stability_loss
 from src.utils.config import load_config
+from src.utils.visualization import VisualizationUtils
 
 
 def filter_by_volatility(dataloader, percentile: float):
@@ -62,6 +63,9 @@ class TrainingPipeline:
         self.model = model
         self.config = config
         self.previous_assignments = None
+        self.last_assignments = None  # For visualization
+        self.best_val_loss = float('inf')
+        self.device = next(model.parameters()).device
 
         logging.info("Initializing Training Pipeline...")
         logging.info(f"Forecast Optimizer LR: {config.training.lr_forecast}, SOM Optimizer LR: {config.training.lr_som}")
@@ -125,27 +129,26 @@ class TrainingPipeline:
         logging.info(f"Loaded checkpoint from {path}. Resuming from epoch {self.epoch}.")
 
 
-    def train_epoch(self, dataloader, epoch: int):
+    def train_epoch(self, train_loader: DataLoader, val_loader: DataLoader, epoch: int):
         """
         Runs a single training epoch.
         """
         self.model.train()
         self.epoch = epoch
-        total_batches = len(dataloader)
+        total_batches = len(train_loader)
         logging.info(f"--- Starting Epoch {epoch+1} ---")
 
         # Curriculum learning
         if hasattr(self.config.training, 'curriculum_epochs') and epoch < self.config.training.curriculum_epochs:
             percentile = (epoch + 1) / self.config.training.curriculum_epochs
             logging.info(f"Applying curriculum learning: filtering for bottom {percentile:.0%} volatility samples.")
-            active_dataloader = filter_by_volatility(dataloader, percentile=percentile)
+            active_dataloader = filter_by_volatility(train_loader, percentile=percentile)
             logging.info(f"Filtered dataloader contains {len(active_dataloader.dataset)} samples.")
         else:
-            active_dataloader = dataloader
+            active_dataloader = train_loader
 
         for batch_idx, (x, y) in enumerate(active_dataloader):
-            device = next(self.model.parameters()).device
-            x, y = x.to(device), y.to(device)
+            x, y = x.to(self.device), y.to(self.device)
 
             if batch_idx % 2 == 0:
                 loss = self.train_forecaster_step(x, y)
@@ -157,12 +160,100 @@ class TrainingPipeline:
                     logging.info(f"Epoch {epoch+1} [{batch_idx}/{total_batches}]: SOM Loss = {loss:.4f}")
 
         # --- End of Epoch ---
-        logging.info(f"--- Epoch {epoch+1} Complete ---")
+        val_loss = self.validate_epoch(val_loader)
+        logging.info(f"--- Epoch {epoch+1} Complete --- Validation Loss: {val_loss:.4f} ---")
 
-        # Save checkpoint at the end of the epoch
-        # The 'is_best' logic would require an evaluation metric, which is not implemented here.
-        # For now, we save every epoch based on the config.
-        self.save_checkpoint(is_best=False)
+        # Save checkpoint
+        is_best = val_loss < self.best_val_loss
+        if is_best:
+            self.best_val_loss = val_loss
+            logging.info(f"New best validation loss: {self.best_val_loss:.4f}. Saving best model.")
+
+        self.save_checkpoint(is_best=is_best)
+
+        # Perform end-of-epoch visualizations
+        self.visualize_epoch(epoch)
+
+    def validate_epoch(self, val_loader: DataLoader) -> float:
+        """Runs a validation loop and returns the average loss."""
+        self.model.eval()
+        total_loss = 0
+        with torch.no_grad():
+            for x, y in val_loader:
+                x, y = x.to(self.device), y.to(self.device)
+                pred, _ = self.model(x)
+                loss = self.forecast_loss(pred, y)
+                total_loss += loss.item()
+        return total_loss / len(val_loader)
+
+    def test(self, test_loader: DataLoader) -> dict:
+        """Evaluates the model on the test set."""
+        # Load the best model
+        checkpoint_path = os.path.join(self.config.checkpoint.save_dir, 'best_model.pth')
+        if not os.path.exists(checkpoint_path):
+            logging.error("Best model checkpoint not found. Run training first.")
+            return {}
+
+        self.load_checkpoint(checkpoint_path)
+        self.model.to(self.device)
+        self.model.eval()
+
+        preds, trues = [], []
+        with torch.no_grad():
+            for x, y in test_loader:
+                x, y = x.to(self.device), y.to(self.device)
+                pred, _ = self.model(x)
+                preds.append(pred.cpu())
+                trues.append(y.cpu())
+
+        preds = torch.cat(preds, dim=0)
+        trues = torch.cat(trues, dim=0)
+
+        # Assuming EvaluationMetrics is available
+        from src.utils.evaluation import EvaluationMetrics
+        r2 = EvaluationMetrics.r2_score(preds, trues)
+        mae = EvaluationMetrics.mae(preds, trues)
+        smape = EvaluationMetrics.smape(preds, trues)
+
+        metrics = {'r2': r2, 'mae': mae, 'smape': smape}
+        logging.info(f"Test Results: {metrics}")
+        return metrics
+
+    def visualize_epoch(self, epoch: int):
+        """Generates and saves visualizations at the end of an epoch."""
+        if not hasattr(self.config, 'visualization') or not self.config.visualization.enabled:
+            return
+
+        logging.info(f"Generating visualizations for epoch {epoch+1}...")
+        output_dir = self.config.visualization.output_dir
+
+        # Plot SOM Topology (U-Matrix)
+        if self.config.visualization.plot_som_topology:
+            VisualizationUtils.plot_som_topology(
+                prototypes=self.model.dsom.prototypes,
+                map_size=self.model.dsom.map_size,
+                output_dir=output_dir,
+                epoch=epoch + 1
+            )
+
+        # Plot Component Planes
+        if self.config.visualization.plot_component_planes:
+            VisualizationUtils.plot_component_planes(
+                prototypes=self.model.dsom.prototypes,
+                map_size=self.model.dsom.map_size,
+                output_dir=output_dir,
+                epoch=epoch + 1
+            )
+
+        # Plot Regime Transitions
+        if self.config.visualization.plot_regime_transitions and self.last_assignments is not None:
+            VisualizationUtils.plot_regime_transitions(
+                assignments=self.last_assignments,
+                output_dir=output_dir,
+                epoch=epoch + 1
+            )
+        logging.info("Visualizations saved.")
+
 
     def train_forecaster_step(self, x: torch.Tensor, y: torch.Tensor) -> float:
         """Performs a single optimization step on the forecasting components."""
@@ -185,6 +276,7 @@ class TrainingPipeline:
         self.forecast_optimizer.step()
 
         self.previous_assignments = assignments.detach()
+        self.last_assignments = assignments.detach()  # Save for visualization
         return total_loss.item()
 
     def train_som_step(self, x: torch.Tensor) -> float:

@@ -5,3 +5,6 @@ scikit-learn
 statsmodels
 pyyaml
 pytest
+matplotlib
+fastapi
+uvicorn

@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from statsmodels.tsa.seasonal import STL
 import logging
+from .datasets import BenchmarkDatasetManager
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -20,6 +21,7 @@ class DataPreprocessor:
         }
         self.scaler = None
         self.trend = None
+        self.dataset_manager = BenchmarkDatasetManager()
 
     def impute_missing(self, data: pd.DataFrame, method: str = 'forward_fill') -> pd.DataFrame:
         """Handles missing values in the dataframe."""
@@ -92,40 +94,76 @@ class DataPreprocessor:
 
         return np.array(X), np.array(y)
 
-    def process(self, data: pd.DataFrame, config) -> tuple[np.ndarray, np.ndarray]:
+    def _split_data(self, data: pd.DataFrame, train_ratio: float, val_ratio: float):
+        """Splits the data into training, validation, and test sets."""
+        n_samples = len(data)
+        n_train = int(n_samples * train_ratio)
+        n_val = int(n_samples * val_ratio)
+
+        train_data = data[:n_train]
+        val_data = data[n_train : n_train + n_val]
+        test_data = data[n_train + n_val :]
+
+        return train_data, val_data, test_data
+
+    def process(self, data, config) -> dict:
         """
-        Runs the full preprocessing pipeline on the data.
+        Runs the full preprocessing pipeline and returns split datasets.
+        The `data` argument can be a pandas DataFrame or a string specifying a benchmark dataset.
         """
+        if isinstance(data, str):
+            logging.info(f"Loading benchmark dataset: {data}")
+            data = self.dataset_manager.load_dataset(data)
+        elif not isinstance(data, pd.DataFrame):
+            raise TypeError("Input `data` must be a pandas DataFrame or a supported dataset name string.")
+
+        # Exclude non-numeric columns like 'date' before processing
+        numeric_cols = data.select_dtypes(include=np.number).columns.tolist()
+        if 'date' in data.columns:
+            logging.info("Excluding 'date' column from preprocessing.")
+            data = data[numeric_cols]
+
         logging.info("Starting data preprocessing...")
 
         # 1. Handle missing values
-        impute_method = config.get('impute_method', 'forward_fill')
+        impute_method = getattr(config, 'impute_method', 'forward_fill')
         logging.info(f"Step 1: Imputing missing values using method: {impute_method}")
         data = self.impute_missing(data, method=impute_method)
 
         # 2. Remove outliers (optional)
-        if config.get('remove_outliers', False):
+        if getattr(config, 'remove_outliers', False):
             logging.info("Step 2: Removing outliers using IQR method.")
-            data = self.remove_outliers(data, method='iqr', threshold=config.get('outlier_threshold', 1.5))
+            data = self.remove_outliers(data, method='iqr', threshold=getattr(config, 'outlier_threshold', 1.5))
 
         # 3. Detrending (optional)
-        if config.get('detrend', False):
+        if getattr(config, 'detrend', False):
             logging.info("Step 3: Detrending data using STL.")
-            data, self.trend = self.detrend(data, method='stl', period=config.get('stl_period', 24))
+            data, self.trend = self.detrend(data, method='stl', period=getattr(config, 'stl_period', 24))
 
         # 4. Scaling
-        scale_method = config.get('scale_method', 'standard')
+        scale_method = getattr(config, 'scale_method', 'standard')
         logging.info(f"Step 4: Scaling data using method: {scale_method}")
         data = self.scale(data, method=scale_method)
 
-        # 5. Create sequences
-        logging.info(f"Step 5: Creating sequences with lookback={config['lookback']}, horizon={config['horizon']}.")
-        X, y = self.create_sequences(
-            data.values,
-            lookback=config['lookback'],
-            horizon=config['horizon'],
-            stride=config.get('stride', 1)
-        )
-        logging.info(f"Preprocessing complete. Created {len(X)} samples.")
-        # We typically predict the first feature.
-        return X, y[:, :, 0]
+        # 5. Split data into train, validation, and test sets
+        train_ratio = config.data.splitting.train_ratio
+        val_ratio = config.data.splitting.val_ratio
+        logging.info(f"Step 5: Splitting data into train/val/test with ratios {train_ratio}/{val_ratio}/{1-train_ratio-val_ratio}")
+        train_df, val_df, test_df = self._split_data(data, train_ratio, val_ratio)
+
+        # 6. Create sequences for each set
+        datasets = {}
+        for split_name, split_df in [('train', train_df), ('val', val_df), ('test', test_df)]:
+            logging.info(f"Creating sequences for {split_name} set...")
+            X, y = self.create_sequences(
+                split_df.values,
+                lookback=config.lookback,
+                horizon=config.horizon,
+                stride=getattr(config, 'stride', 1)
+            )
+            # We typically predict the first feature.
+            datasets[split_name] = (X, y[:, :, 0])
+            logging.info(f"Created {len(X)} samples for {split_name} set.")
+
+        logging.info("Preprocessing complete.")
+        return datasets

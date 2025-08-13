@@ -256,6 +256,51 @@ python -m pytest tests/test_pipeline.py -v
 python tests/test_dsom.py
 ```
 
+## 🚀 API Usage
+
+This project includes a FastAPI-based web server for serving the trained model.
+
+### 1. Start the Server
+
+To start the API server, run the `serve.py` script:
+
+```bash
+python src/serve.py --port 8000
+```
+
+### 2. API Documentation
+
+Once the server is running, interactive API documentation (provided by Swagger UI) is available at:
+`http://localhost:8000/docs`
+
+### 3. Making a Prediction
+
+You can send a POST request to the `/predict` endpoint with your time-series data. The input data should be a JSON object containing a `data` field with a list of floats. The length of the list must match the `lookback` parameter defined in `config.yml`.
+
+**Example using `curl`:**
+
+```bash
+curl -X 'POST' \
+  'http://localhost:8000/predict' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "data": [
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6
+  ]
+}'
+```
+
+The API will return a JSON object with the forecasted values.
+
 ## 📋 Implementation Status
 
 ### ✅ Completed Components
@@ -272,12 +317,12 @@ python tests/test_dsom.py
 ### 🚧 Future Enhancements
 
 - [x] **Transformer Integration**: Add transformer-based expert alongside N-BEATS
-- [ ] **Visualization Tools**: SOM topology and regime transition plots
-- [ ] **Production Deployment**: Model serving and inference optimization
+- [x] **Visualization Tools**: SOM topology and regime transition plots
+- [x] **Production Deployment**: Model serving and inference optimization
 - [x] **Model Checkpointing**: Save/load functionality with reproducibility
 - [x] **Configuration Management**: YAML/JSON config file support
-- [ ] **Example Notebooks**: Comprehensive tutorials and use cases
-- [ ] **Benchmark Datasets**: Integration with standard time-series datasets
+- [x] **Example Notebooks**: Comprehensive tutorials and use cases
+- [x] **Benchmark Datasets**: Integration with standard time-series datasets
 
 ## 🔬 Research Background
 

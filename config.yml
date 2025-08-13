@@ -1,5 +1,14 @@
 # Configuration for DSOM-BEATS Model
 
+# --- Data Configuration ---
+data:
+  name: 'ETTh1'       # Name of the benchmark dataset (e.g., ETTh1, ETTm1) or 'custom'.
+  # If 'custom', you must provide your own dataframe to the preprocessor.
+  splitting:
+    train_ratio: 0.7
+    val_ratio: 0.15
+    test_ratio: 0.15
+
 # --- Data Parameters ---
 lookback: 96          # Input sequence length
 horizon: 24           # Forecast horizon
@@ -39,3 +48,11 @@ training:
 checkpoint:
   save_dir: 'checkpoints/' # Directory to save model checkpoints
   save_every_epoch: true   # Whether to save a checkpoint after every epoch
+
+# --- Visualization ---
+visualization:
+  enabled: true
+  output_dir: 'visualizations/'
+  plot_som_topology: true
+  plot_component_planes: true
+  plot_regime_transitions: true

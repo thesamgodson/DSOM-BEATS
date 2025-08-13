@@ -4,7 +4,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A novel time-series forecasting architecture that combines **Differentiable Self-Organizing Maps (DSOM)** with **N-BEATS** to achieve superior forecasting accuracy through topology-aware feature learning and regime-adaptive prediction routing.
+A novel time-series forecasting architecture that combines **Differentiable Self-Organizing Maps (DSOM)** with **N-BEATS** and **Transformer** experts to achieve superior forecasting accuracy through topology-aware feature learning and regime-adaptive prediction routing.
 
 ## 🚀 Key Features
 
@@ -22,54 +22,58 @@ Input Time Series → Feature Extractor → DSOM Clustering
                                           ↓
 Trend Expert ←─────── Regime Router ←─── Soft Assignments
 Seasonality Expert ←─────────┘
+Transformer Expert ←─────────┘
                     ↓
               Final Prediction
 ```
 
-The system uses a **Differentiable Self-Organizing Map** to identify regime patterns in time-series data, then routes predictions through specialized expert networks (trend and seasonality) based on the detected regimes.
+The system uses a **Differentiable Self-Organizing Map** to identify regime patterns in time-series data, then routes predictions through specialized expert networks (trend, seasonality, and transformer) based on the detected regimes.
 
 ## 🏗️ Project Structure
 
 ```
-DSOM/
+DSOM-BEATS/
 ├── src/
 │   ├── data/
 │   │   └── preprocessing.py      # Data preprocessing pipeline
 │   ├── losses/
-│   │   └── losses.py            # Custom loss functions
+│   │   └── losses.py            # Custom loss functions (volatility-aware MSE, SOM losses)
 │   ├── models/
 │   │   └── nbeats.py           # DSOM-enhanced N-BEATS architecture
 │   ├── modules/
-│   │   └── dsom.py             # Differentiable SOM implementation
+│   │   ├── dsom.py             # Differentiable SOM implementation
+│   │   └── transformer.py      # Transformer expert module
 │   ├── pipelines/
 │   │   └── training.py         # Training pipeline with curriculum learning
 │   └── utils/
+│       ├── config.py           # Configuration utilities
 │       └── evaluation.py       # Evaluation metrics
 ├── tests/
 │   ├── test_dsom.py            # DSOM unit tests
 │   └── test_pipeline.py        # Pipeline integration tests
-├── requirements.txt            # Dependencies
+├── config.yml                  # Model configuration
+├── requirements.txt            # Python dependencies
 ├── LICENSE                     # MIT License
 └── README.md                   # This file
 ```
 
 ## 🔧 Installation
 
-1. **Clone the repository:**
-```bash
-git clone https://github.com/yourusername/DSOM.git
-cd DSOM
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/thesamgodson/DSOM-BEATS.git
+   cd DSOM-BEATS
+   ```
 
-2. **Install dependencies:**
-```bash
-pip install -r requirements.txt
-```
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. **Verify installation by running tests:**
-```bash
-python -m pytest tests/ -v
-```
+3. **Verify installation**:
+   ```python
+   python -c "import torch; print('PyTorch version:', torch.__version__)"
+   ```
 
 ## 🚦 Quick Start
 
@@ -82,35 +86,21 @@ python -m pytest tests/ -v
 ```python
 import torch
 from src.models.nbeats import DSOM_NBEATS
-from src.pipelines.training import TrainingPipeline
-from src.data.preprocessing import DataPreprocessor
 from src.utils.config import load_config
 
-# Load configuration from YAML file
+# Load configuration
 config = load_config('config.yml')
 
 # Initialize model
 model = DSOM_NBEATS(config)
 
-# Prepare your data (shape: [batch_size, sequence_length, features])
-# X, y = prepare_your_data()  # Implement based on your dataset
-# dataloader = create_your_dataloader(X, y)
+# Sample data (batch_size=32, lookback=96)
+X = torch.randn(32, 96)
 
-# Training
-pipeline = TrainingPipeline(model, config)
-
-# Optionally, load a checkpoint to resume training
-# pipeline.load_checkpoint('checkpoints/checkpoint_epoch_X.pth')
-
-# Start training loop
-# start_epoch = pipeline.epoch
-# for epoch in range(start_epoch, num_epochs):
-#     pipeline.train_epoch(dataloader, epoch)
-
-# Inference
-# model.eval()
-# with torch.no_grad():
-#     predictions, regime_assignments = model(X)
+# Forward pass
+forecast, som_assignments = model(X)
+print(f"Forecast shape: {forecast.shape}")  # [32, 24]
+print(f"SOM assignments shape: {som_assignments.shape}")  # [32, 100]
 ```
 
 ### Data Preprocessing
@@ -211,12 +201,24 @@ The training pipeline implements curriculum learning and alternating optimizatio
 
 ```python
 from src.pipelines.training import TrainingPipeline
+from torch.utils.data import DataLoader, TensorDataset
 
+# Prepare your data (example with synthetic data)
+X_train = torch.randn(1000, 96)  # 1000 samples, 96 timesteps
+y_train = torch.randn(1000, 24)  # 1000 samples, 24 forecast steps
+train_dataset = TensorDataset(X_train, y_train)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+
+# Initialize training pipeline
 pipeline = TrainingPipeline(model, config)
 
-# Training with curriculum learning
-for epoch in range(num_epochs):
-    pipeline.train_epoch(dataloader, epoch)
+# Train the model with curriculum learning
+for epoch in range(50):  # Example: 50 epochs
+    pipeline.train_epoch(train_loader, epoch)
+    
+    # Save checkpoint
+    if epoch % 10 == 0:
+        pipeline.save_checkpoint(is_best=False)
 ```
 
 **Training Features:**

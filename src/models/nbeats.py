@@ -124,13 +124,15 @@ class RegimeGatedRouter(nn.Module):
 # --- Main Model ---
 class DSOM_NBEATS(nn.Module):
     """DSOM-NBEATS architecture configured from a YAML file."""
-    def __init__(self, config):
+    def __init__(self, config, n_features: int):
         super().__init__()
         self.config = config
+        self.n_features = n_features
+        self.input_size = config.lookback * n_features
 
         # Feature extractor for DSOM
         self.feature_extractor = FeatureExtractor(
-            input_size=config.lookback,
+            input_size=self.input_size,
             width=512  # This could also be moved to config
         )
 
@@ -143,7 +145,7 @@ class DSOM_NBEATS(nn.Module):
 
         # Expert Stacks
         self.trend_stack = NBEATSStack(
-            input_size=config.lookback,
+            input_size=self.input_size,
             horizon=config.horizon,
             n_blocks=config.experts.trend.n_blocks,
             hidden_units=config.experts.trend.hidden_units,
@@ -152,7 +154,7 @@ class DSOM_NBEATS(nn.Module):
         )
 
         self.seasonal_stack = NBEATSStack(
-            input_size=config.lookback,
+            input_size=self.input_size,
             horizon=config.horizon,
             n_blocks=config.experts.seasonality.n_blocks,
             hidden_units=config.experts.seasonality.hidden_units,
@@ -165,7 +167,7 @@ class DSOM_NBEATS(nn.Module):
         # Add Transformer expert if enabled in config
         if self.config.experts.transformer.enabled:
             self.transformer_stack = TransformerStack(
-                input_size=config.lookback,
+                input_size=self.input_size,
                 horizon=config.horizon,
                 d_model=config.experts.transformer.d_model,
                 nhead=config.experts.transformer.n_head,
@@ -184,8 +186,9 @@ class DSOM_NBEATS(nn.Module):
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass for the DSOM-NBEATS model."""
-        if x.shape[-1] == 1:
-            x = x.squeeze(-1)
+        # Flatten the input for multivariate series
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
 
         # 1. Extract features for DSOM routing
         features = self.feature_extractor(x)

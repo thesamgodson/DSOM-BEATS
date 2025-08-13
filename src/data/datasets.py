@@ -11,10 +11,10 @@ class BenchmarkDatasetManager:
     """
 
     _DATASET_URLS = {
-        "ETTh1": "https://raw.githubusercontent.com/thuml/Autoformer/main/data/ETT/ETTh1.csv",
-        "ETTh2": "https://raw.githubusercontent.com/thuml/Autoformer/main/data/ETT/ETTh2.csv",
-        "ETTm1": "https://raw.githubusercontent.com/thuml/Autoformer/main/data/ETT/ETTm1.csv",
-        "ETTm2": "https://raw.githubusercontent.com/thuml/Autoformer/main/data/ETT/ETTm2.csv",
+        "ETTh1": "https://raw.githubusercontent.com/zhouhaoyi/ETDataset/main/ETT-small/ETTh1.csv",
+        "ETTh2": "https://raw.githubusercontent.com/zhouhaoyi/ETDataset/main/ETT-small/ETTh2.csv",
+        "ETTm1": "https://raw.githubusercontent.com/zhouhaoyi/ETDataset/main/ETT-small/ETTm1.csv",
+        "ETTm2": "https://raw.githubusercontent.com/zhouhaoyi/ETDataset/main/ETT-small/ETTm2.csv",
     }
 
     def __init__(self, data_dir: str = 'data/'):

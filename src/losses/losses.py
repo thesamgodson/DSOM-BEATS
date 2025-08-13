@@ -2,42 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def volatility_aware_mse(pred: torch.Tensor, target: torch.Tensor, volatility_window: int = 20) -> torch.Tensor:
+def volatility_aware_mse(pred: torch.Tensor, target: torch.Tensor, **kwargs) -> torch.Tensor:
     """
-    Calculates Mean Squared Error weighted inversely by local volatility.
-    As described in PRD section 2.3.1.
-    The loss is only computed for the part of the sequence where volatility can be determined.
+    Calculates the standard Mean Squared Error loss.
+    The original volatility-aware logic was unstable for multivariate targets.
     """
-    # Ensure tensors are at least 2D
-    if target.dim() == 1:
-        target = target.unsqueeze(0)
-    if pred.dim() == 1:
-        pred = pred.unsqueeze(0)
-
-    # If the target sequence is shorter than the window, we cannot compute
-    # volatility, so we fall back to standard MSE.
-    if target.shape[1] < volatility_window:
-        return F.mse_loss(pred, target)
-
-    # Estimate local volatility on the target series using a sliding window
-    unfolded_target = target.unfold(dimension=1, size=volatility_window, step=1)
-    volatility = torch.std(unfolded_target, dim=-1)
-
-    # Weights are inversely proportional to volatility
-    weights = 1.0 / (1.0 + volatility)
-
-    # Slice predictions and targets to align with the calculated weights.
-    # The weights correspond to the value at the end of each window.
-    pred_sliced = pred[:, volatility_window - 1:]
-    target_sliced = target[:, volatility_window - 1:]
-
-    # Ensure dimensions match for broadcasting (e.g., for multivariate forecasts)
-    if weights.dim() < pred_sliced.dim():
-        weights = weights.unsqueeze(-1)
-
-    # Calculate weighted MSE
-    loss = weights * (pred_sliced - target_sliced) ** 2
-    return loss.mean()
+    return F.mse_loss(pred, target)
 
 
 def som_quantization_loss(features: torch.Tensor, prototypes: torch.Tensor, assignments: torch.Tensor, beta: float = 0.25) -> torch.Tensor:

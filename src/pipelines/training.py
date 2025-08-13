@@ -284,7 +284,9 @@ class TrainingPipeline:
         self.som_optimizer.zero_grad()
 
         with torch.no_grad():
-            if x.shape[-1] == 1:
+            if x.dim() > 2:
+                x_squeezed = x.view(x.size(0), -1)
+            elif x.shape[-1] == 1:
                 x_squeezed = x.squeeze(-1)
             else:
                 x_squeezed = x

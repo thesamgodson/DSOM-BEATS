@@ -77,7 +77,8 @@ class TestEndToEndPipeline(unittest.TestCase):
         cls.test_loader = DataLoader(TensorDataset(torch.from_numpy(datasets['test'][0]).float(), torch.from_numpy(datasets['test'][1]).float()), batch_size=32, shuffle=False)
 
         # 5. Initialize Model and Pipeline
-        cls.model = DSOM_NBEATS(cls.config)
+        n_features = datasets['train'][0].shape[2]
+        cls.model = DSOM_NBEATS(cls.config, n_features=n_features)
         cls.pipeline = TrainingPipeline(cls.model, cls.config)
 
     def test_full_pipeline_runs(self):

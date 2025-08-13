@@ -31,7 +31,8 @@ def load_model():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    MODEL = DSOM_NBEATS(CONFIG).to(device)
+    # The API is designed for univariate forecasting, so n_features is 1.
+    MODEL = DSOM_NBEATS(CONFIG, n_features=1).to(device)
 
     # Load a checkpoint
     checkpoint_dir = CONFIG.checkpoint.save_dir
@@ -67,8 +68,8 @@ def predict(input_data: PredictionInput):
             detail=f"Input data must have a length of {CONFIG.lookback}, but got {len(input_data.data)}."
         )
 
-    # Convert to tensor
-    input_tensor = torch.tensor(input_data.data).float().unsqueeze(0) # Add batch dimension
+    # Convert to tensor and add batch and feature dimensions
+    input_tensor = torch.tensor(input_data.data).float().unsqueeze(0).unsqueeze(-1)
 
     # Make prediction
     with torch.no_grad():

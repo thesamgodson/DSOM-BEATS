@@ -11,7 +11,7 @@ A novel time-series forecasting architecture that combines **Differentiable Self
 - **Differentiable SOM Integration**: End-to-end differentiable clustering for regime detection
 - **Regime-Aware Routing**: Dynamic expert selection based on detected market/data regimes
 - **Topology Preservation**: Maintains manifold structure of time-series patterns in latent space
-- **Volatility-Aware Loss**: Adaptive weighting based on local volatility patterns
+- **Stable Loss Function**: Uses standard Mean Squared Error for robust and stable training.
 - **Curriculum Learning**: Progressive training from low to high volatility samples
 - **Alternating Optimization**: Specialized training for forecasting and clustering components
 
@@ -91,11 +91,12 @@ from src.utils.config import load_config
 # Load configuration
 config = load_config('config.yml')
 
-# Initialize model
-model = DSOM_NBEATS(config)
+# Initialize model (assuming 1 feature for this example)
+n_features = 1
+model = DSOM_NBEATS(config, n_features=n_features)
 
-# Sample data (batch_size=32, lookback=96)
-X = torch.randn(32, 96)
+# Sample data (batch_size=32, lookback=96, features=1)
+X = torch.randn(32, 96, n_features)
 
 # Forward pass
 forecast, som_assignments = model(X)
@@ -174,11 +175,12 @@ predictions, assignments = model(input_sequence)
 
 ### 3. Advanced Loss Functions
 
-#### Volatility-Aware MSE
+#### Forecasting Loss
+The model uses a standard Mean Squared Error (MSE) loss for training the forecasting components. The original custom `volatility_aware_mse` was replaced to ensure stability with multivariate datasets.
 ```python
-from src.losses.losses import volatility_aware_mse
+from src.losses.losses import volatility_aware_mse as forecast_loss
 
-loss = volatility_aware_mse(predictions, targets, volatility_window=20)
+loss = forecast_loss(predictions, targets)
 ```
 
 #### SOM Quantization Loss
@@ -314,15 +316,12 @@ The API will return a JSON object with the forecasted values.
 - [x] **Evaluation Metrics**: Standard forecasting and clustering metrics
 - [x] **Unit Tests**: DSOM differentiability and assignment validation
 
-### 🚧 Future Enhancements
+### 🚧 Future Work
 
-- [x] **Transformer Integration**: Add transformer-based expert alongside N-BEATS
-- [x] **Visualization Tools**: SOM topology and regime transition plots
-- [x] **Production Deployment**: Model serving and inference optimization
-- [x] **Model Checkpointing**: Save/load functionality with reproducibility
-- [x] **Configuration Management**: YAML/JSON config file support
-- [x] **Example Notebooks**: Comprehensive tutorials and use cases
-- [x] **Benchmark Datasets**: Integration with standard time-series datasets
+While the core components are in place, future work could include:
+- **Production Deployment**: Optimizing the model for serving in a production environment.
+- **Hyperparameter Optimization**: Automated tuning of model and training parameters.
+- **Extended Benchmarking**: Evaluation against a wider range of public datasets.
 
 ## 🔬 Research Background
 

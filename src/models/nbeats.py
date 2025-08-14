@@ -184,6 +184,19 @@ class DSOM_NBEATS(nn.Module):
             n_experts=n_experts
         )
 
+        # --- STABILITY FIX: Apply weight initialization ---
+        self.apply(self._init_weights)
+        nn.init.normal_(self.dsom.prototypes, mean=0, std=0.01)
+
+    def _init_weights(self, module):
+        """Initializes weights for linear layers."""
+        if isinstance(module, nn.Linear):
+            # Xavier/Glorot normal initialization with a small gain for stability
+            nn.init.xavier_normal_(module.weight, gain=0.1)
+            if module.bias is not None:
+                # Initialize bias to zero
+                nn.init.constant_(module.bias, 0)
+
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Forward pass for the DSOM-NBEATS model."""
         # Flatten the input for multivariate series

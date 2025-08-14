@@ -33,7 +33,8 @@ import json
 from torch.utils.data import DataLoader, TensorDataset
 
 # Add project root to system path
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
+# To make the script runnable from anywhere, we add the project root to the path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -50,7 +51,7 @@ from src.data.preprocessing import DataPreprocessor
 # In[ ]:
 
 
-config = load_config('../config.yml')
+config = load_config('config.yml')
 print("--- Data Configuration ---")
 print(f"Dataset Name: {config.data.name}")
 print(f"Splitting Ratios (Train/Val/Test): {config.data.splitting.train_ratio}/{config.data.splitting.val_ratio}/{config.data.splitting.test_ratio}")

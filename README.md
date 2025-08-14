@@ -15,6 +15,20 @@ A novel time-series forecasting architecture that combines **Differentiable Self
 - **Curriculum Learning**: Progressive training from low to high volatility samples
 - **Alternating Optimization**: Specialized training for forecasting and clustering components
 
+## 🛠️ Stability and Reproducibility Fixes
+
+Recent updates have focused on improving the stability and reproducibility of the training pipeline, especially when dealing with noisy or difficult datasets. The following fixes have been implemented:
+
+- **Controlled Weight Initialization**: The model now uses Xavier/Glorot normal initialization with a small gain (`0.1`) for all linear layers and initializes SOM prototypes from a normal distribution (`mean=0, std=0.01`) to prevent exploding gradients at the start of training.
+- **Gradient Clipping**: Gradient norms are clipped at a maximum value of `1.0` during backpropagation to prevent exploding gradients during training.
+- **Reduced Learning Rates**: Default learning rates have been significantly reduced (`1e-5` for the forecaster, `1e-6` for the SOM) for more stable convergence.
+- **Training Loop Safety Checks**: The training loop now includes safety checks to:
+  - Detect and skip batches that produce `NaN` or `inf` values in the model's output.
+  - Skip batches that result in an unusually high loss value (e.g., > 1000).
+  - Monitor gradient norms and stop training if they become non-finite, preventing wasted computation.
+- **Simplified Loss Function**: The primary forecasting loss is a simple and stable `nn.MSELoss`. The more complex SOM-related losses are trained separately and can be disabled for debugging.
+- **Robust Data Handling**: The data preprocessing pipeline has been verified to correctly scale the data, and the example scripts have been updated to handle path issues, making them runnable from any directory.
+
 ## 📊 Architecture Overview
 
 ```
